@@ -1,0 +1,16 @@
+name = "KleinianGenus2"
+uuid = "2fb13e72-889d-44e0-ab4f-638233f21d2d"
+version = "1.0.0"
+authors = ["matsmir98"]
+
+[deps]
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+PolynomialRoots = "3a141323-8675-5d76-9d11-e1df1406c778"
+Polynomials = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[compat]
+LinearAlgebra = "1.12.0"
+PolynomialRoots = "1.0.0"
+Polynomials = "4.1.1"
+Random = "1.11.0"
