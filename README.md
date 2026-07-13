@@ -60,8 +60,9 @@ C = Genus2WCurve(e, source = "Roots", is_real = true) #requires to calculate the
 ```
 ```
 e = BigFloat.([1,2,3,4,5])
-C = Genus2WCurve(e, source = "Roots", is_real = true, n=30) #returns a curve with functions that perform all calculations in BigFloat;
-                                            #may require additional iterations to achieve machine precision
+C = Genus2WCurve(e, source = "Roots", is_real = true, n=30)
+#returns a curve with functions that perform all calculations in BigFloat;
+#may require additional iterations to achieve machine precision
 ```
 ```
 e = Complex{BigFloat}.([1 + 2im, -9 + 13im, 3 - 7im, -11 + 4im, 42 + 42im])
