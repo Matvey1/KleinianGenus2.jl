@@ -23,7 +23,7 @@ The type `Genu2WCurve` represents an complex curve of genus 2 given in Weierstra
 * `Eta` -- contains vectors that determine Weierstrass zeta function monodromy, corresponding to basis elements contained in `Periods` (type -- `Matrix{Complex{T}}`).
 * `KleinianFunc` -- a function, that calculates the values of classical Kleinian functions at a given point. That is, `WeierstrassFunc(z)` is the tuple `(sigma(z), zeta_1(z), zeta_2(z), p_22(z), p_12(z), p_11(z))`.
 * `KleinianFuncSigmaSquared` -- a function that calculates the tuple `(sigma^2(z), zeta_1(z), zeta_2(z), p_22(z), p_12(z), p_11(z))`. It is slightly faster than the previous and should be used, when there is no need in the value `sigma(z)`.
-* `KleinianFuncWeight2` -- a function that calculates values of the [Kleinian functions of weight 2](https://link.springer.com/article/10.1134/S1995080225615334) `T(z) = (S(z), S_22(z), S_12(z), S_11(z))` and their first derivatives with respect to `z_1` and `z_2`. This is the core function, on which the functions `KleinianFunc` and `KleinianFuncSigmaSquared` are based. The function `T` is an entire analytic function, so `KleinianFuncWeight2` has a more stable behaviour near sigma-divisor (where functions zeta and p have poles). If the output of `KleinianFuncWeight2` suffices to one's purposes, it should be used instead of the foregoing functions.
+* `KleinianFuncWeight2` -- a function that calculates values of the [Kleinian functions of weight 2](https://link.springer.com/article/10.1134/S1995080225615334) `T(z) = (S(z), S_22(z), S_12(z), S_11(z))` and their first derivatives with respect to `z_1` and `z_2` (this functions returns a tuple with three fields, each being an array of 4 numbers in order: the vector `T`, its derivative with respect to `z_1`, its derivative with respect to `z_2`). This is the core function, on which the functions `KleinianFunc` and `KleinianFuncSigmaSquared` are based. The function `T` is an entire analytic function, so `KleinianFuncWeight2` has a more stable behaviour near sigma-divisor (where functions zeta and p have poles). If the output of `KleinianFuncWeight2` suffices to one's purposes, it should be used instead of the foregoing functions.
 * `JacobiInversion` -- a function that given a point `z` calculates the divisor `D` on the curve, which is mapped to `z` by the Abel map.
 * `AbelMap` -- a function that given a divisor `D` on the curve calculates its image with respect to the Abel map.
 
@@ -45,39 +45,38 @@ Examples
 Examples of constructing a `WCurve`:
 
 ```
-g2 = 4.0
-g3 = 0.0
-C = WCurve([g2,g3]) #adding 'source = "Invariants"' does not affect the result
+cfs = [-1,0,1,2,3,4]
+C = Genus2WCurve(cfs) #adding 'source = "Coefficients" does not affect the result
+F = Polynomial(cfs)
+C = Genus2WCurve(F, sourve = "Polynomial") #constructs the same curve as above
 ```
 ```
-g2 = 4.0
-g3 = 0.0
-C = WCurve([g2,g3], rectangular = true) #imposing the rectangular normalization of the basis in period lattice
+e = [1,2,3,4,5]
+C = Genus2WCurve(e, source = "Roots")
 ```
 ```
-g2 = BigFloat(4.0)
-g3 = 0.0
-C = WCurve([g2,g3]) #returns a curve with functions that perform all calculations in BigFloat.
+e = [1,2,3,4,5]
+C = Genus2WCurve([g2,g3], source = "Roots", is_real = true) #requires to calculate the whole basis in the period lattice
+```
+```
+e = BigFloat.([1,2,3,4,5])
+C = Genus2WCurve(e, source = "Roots", n=30) #returns a curve with functions that perform all calculations in BigFloat;
+                                            #may require additional iterations to achieve machine precision
 ```
 ```
 setprecision(5000)
-g2 = BigFloat(4.0)
-g3 = 0.0
-C = WCurve([g2,g3], n = 30) #due to very high precision of the floating point arithmetic
-#it may require more iterations of Landen's tranform to achieve machine precision
-```
-```
-r = [-1,0,1]
-C = WCurve(r, source = "Roots") #the same curve as in the above examples
+e = BigFloat.([1,2,3,4,5])
+C = Genus2WCurve(e, source = "Roots", n=50) #due to very high precision of the floating point arithmetic
+                    #it may require more iterations of Richelot's tranform to achieve machine precision
 ```
 
-Weierstrass functions calling examples:
+Kleinian functions calling examples:
 ```
-#given that C is an object of WCurve type
-z = 6 + 7im
-WF = C.WeierstrassFunc(z)
-w = C.AbelMap(WF[3], WF[4]) # should be equal to z modulo period lattice
-WF = C.WeierstrassFunc(z, use_periodicity = true) # the same as the previous call, may be more stable if |z| is large
-WF = C.WeierstrassFuncSigmaSquared(z) # the same as the previous two, but the first value (i.e. sigma) is squared
-WF = C.WeierstrassFuncRaw(z) # calculates auxiliary functions S = sigma^2, R = sigma^2 p, and their derivatives
+#given that C is an object of Genus2WCurve type
+z = [1 + 2im, -2 + 1im]
+KF = C.KleinianFunc(z)
+KF = C.KleinianFuncSigmaSquared(z) # the same as previous, but the sigma function (first value) is squared. Works slightly faster.
+KF = C.KleinianFuncWeight2(z)
+D = C.JacobiInversion(z) # return value has the type Genus2WCurveDivisor
+w = C.AbelMap(D) # z-w should be an element of the period lattice
 ```
