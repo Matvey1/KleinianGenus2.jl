@@ -34,7 +34,7 @@ function RichelotInversion(DataVec, M, F, v, e)
 	function NewtonCorrection(w)
 		u = copy(w)
 		i = 0
-		while(norm(IM(u)) > 10*e || i < 30)
+		while (abs(det(J(u))) > 10 * eps(typeof(real(u[1]))) && (norm(IM(u)) > 10*e || i < 30))
 			u = u - inv(J(u))*IM(u)
 			i = i+1
 		end
