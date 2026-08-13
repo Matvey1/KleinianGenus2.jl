@@ -122,12 +122,14 @@ function KummerEquationCheck(v, f)
 		+ (f[5]^2 - 4*f[4]*f[6])*v[3]^4)
 end
 
-function GenerateRandomPoint(Roots)
+function GenerateRandomPoint(Roots, aux)
 	T = typeof(real(Roots[1]))
 	while(true)
 		a = 10*(rand(Complex{T}) - 0.5 - 0.5im)
 		if( minimum([abs(Roots[j] - a) for j in 1:length(Roots)]) > 1)
-			return a
+			if( minimum([abs(aux[j] - a) for j in 1:length(aux)]) > 1)
+				return a
+			end
 		end
 	end
 end
