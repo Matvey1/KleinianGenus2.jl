@@ -133,7 +133,7 @@ struct Genus2WCurve{T<:AbstractFloat,KF<:Function,SKF<:Function,KF2<:Function,JI
 		end
 		function Ab(DD::Genus2WCurveDivisor)
 			if(length(DD.P2) > 0)
-				a = GenerateRandomPoint(Roots)
+				a = GenerateRandomPoint(Roots, [0, DD.P1[1], DD.P2[1]])
 				b = sqrt(F(a))
 				D = [Genus2WCurveDivisor(DD.P1, (a,b)), Genus2WCurveDivisor(DD.P2, (a,-b))]
 				v = [KummerCoord(D[j], F) for j in 1:2]
@@ -154,7 +154,7 @@ struct Genus2WCurve{T<:AbstractFloat,KF<:Function,SKF<:Function,KF2<:Function,JI
 				return z[1] + z[2]
 			end
 			if(length(DD.P1) > 0)
-				a = GenerateRandomPoint(Roots)
+				a = GenerateRandomPoint(Roots, [0, DD.P1[1]])
 				b = sqrt(F(a))
 				D = [Genus2WCurveDivisor(DD.P1, (a,b)), Genus2WCurveDivisor((a,-b))]
 				v = [KummerCoord(D[j], F) for j in 1:2]
