@@ -131,53 +131,88 @@ struct Genus2WCurve{T<:AbstractFloat,KF<:Function,SKF<:Function,KF2<:Function,JI
 			yvec = xvec.*p222 .+ p221
 			return Genus2WCurveDivisor((xvec[1], yvec[1]), (xvec[2], yvec[2]))
 		end
-		function Ab(DD::Genus2WCurveDivisor)
-			if(length(DD.P2) > 0)
-				a = GenerateRandomPoint(Roots, [0, DD.P1[1], DD.P2[1]])
-				b = sqrt(F(a))
-				D = [Genus2WCurveDivisor(DD.P1, (a,b)), Genus2WCurveDivisor(DD.P2, (a,-b))]
-				v = [KummerCoord(D[j], F) for j in 1:2]
-				v = [RichelotSequenceInversion(AMM1, AMM2, AMV, HatF, v[j]/norm(v[j]), e) for j in 1:2]
-				x = [PolynomialRoots.roots([-v[j][3], -v[j][2], v[j][1]]) for j in 1:2]
-				z = [DegenerateAbel(Lcoeff, p, x[j]) for j in 1:2]
-				for j in 1:2
-					S = KlFWeight2(z[j])
-					diff2Pz = ((S[3] - S[1]*(S[3][1]/S[1][1]))/S[1][1])[2:3]
-					diff2Ptrue = [(D[j].P2[2] - D[j].P1[2])/(D[j].P2[1] - D[j].P1[1]), (D[j].P2[1]*D[j].P1[2] - D[j].P1[1]*D[j].P2[2])/(D[j].P2[1] - D[j].P1[1])]
-					if( norm(diff2Pz + diff2Ptrue) < norm(diff2Pz - diff2Ptrue) )
-						z[j] = -z[j]
+		function Ab(DD::Genus2WCurveDivisor, randomize = false)
+			if(randomize)
+				if(length(DD.P2) > 0)
+					a = GenerateRandomPoint(Roots, [0, DD.P1[1], DD.P2[1]])
+					b = sqrt(F(a))
+					D = [Genus2WCurveDivisor(DD.P1, (a,b)), Genus2WCurveDivisor(DD.P2, (a,-b))]
+					v = [KummerCoord(D[j], F) for j in 1:2]
+					v = [RichelotSequenceInversion(AMM1, AMM2, AMV, HatF, v[j]/norm(v[j]), e) for j in 1:2]
+					x = [PolynomialRoots.roots([-v[j][3], -v[j][2], v[j][1]]) for j in 1:2]
+					z = [DegenerateAbel(Lcoeff, p, x[j]) for j in 1:2]
+					for j in 1:2
+						S = KlFWeight2(z[j])
+						diff2Pz = ((S[3] - S[1]*(S[3][1]/S[1][1]))/S[1][1])[2:3]
+						diff2Ptrue = [(D[j].P2[2] - D[j].P1[2])/(D[j].P2[1] - D[j].P1[1]), (D[j].P2[1]*D[j].P1[2] - D[j].P1[1]*D[j].P2[2])/(D[j].P2[1] - D[j].P1[1])]
+						if( norm(diff2Pz + diff2Ptrue) < norm(diff2Pz - diff2Ptrue) )
+							z[j] = -z[j]
+						end
 					end
+					if(is_real)
+						return normalizeToPeriods(W, z[1] + z[2])
+					end
+					return z[1] + z[2]
+				end
+				if(length(DD.P1) > 0)
+					a = GenerateRandomPoint(Roots, [0, DD.P1[1]])
+					b = sqrt(F(a))
+					D = [Genus2WCurveDivisor(DD.P1, (a,b)), Genus2WCurveDivisor((a,-b))]
+					v = [KummerCoord(D[j], F) for j in 1:2]
+					v = [RichelotSequenceInversion(AMM1, AMM2, AMV, HatF, v[j]/norm(v[j]), e) for j in 1:2]
+					x = [PolynomialRoots.roots([-v[j][3], -v[j][2], v[j][1]]) for j in 1:2]
+					z = [DegenerateAbel(Lcoeff, p, x[j]) for j in 1:2]
+					S = KlFWeight2(z[1])
+					diff2Pz = ((S[3] - S[1]*(S[3][1]/S[1][1]))/S[1][1])[2:3]
+					diff2Ptrue = [(D[1].P2[2] - D[1].P1[2])/(D[1].P2[1] - D[1].P1[1]), (D[1].P2[1]*D[1].P1[2] - D[1].P1[1]*D[1].P2[2])/(D[1].P2[1] - D[1].P1[1])]
+					if( norm(diff2Pz + diff2Ptrue) < norm(diff2Pz - diff2Ptrue) )
+						z[1] = -z[1]
+					end
+					S = KlFWeight2(z[2])
+					diff1Pz = [S[3][2]/S[1][2] - S[3][3]/S[1][3], S[2][2]/S[1][2] - S[2][3]/S[1][3]]
+					diff1Ptrue = [0, b/a]
+					println(diff1Pz, "\n", diff1Ptrue)
+					if( norm(diff1Pz + diff1Ptrue) < norm(diff1Pz - diff1Ptrue) )
+						z[2] = -z[2]
+					end
+					if(is_real)
+						return normalizeToPeriods(W, z[1] + z[2])
+					end
+					return z[1] + z[2]
+				end
+			end
+			if(length(DD.P2) > 0)
+				v = KummerCoord(DD, F)
+				v = RichelotSequenceInversion(AMM1, AMM2, AMV, HatF, v/norm(v), e)
+				x = PolynomialRoots.roots([-v[3], -v[2], v[1]])
+				z = DegenerateAbel(Lcoeff, p, x)
+				S = KlFWeight2(z)
+				diff2Pz = ((S[3] - S[1]*(S[3][1]/S[1][1]))/S[1][1])[2:3]
+				diff2Ptrue = [(DD.P2[2] - DD.P1[2])/(DD.P2[1] - DD.P1[1]), (DD.P2[1]*DD.P1[2] - DD.P1[1]*DD.P2[2])/(DD.P2[1] - DD.P1[1])]
+				if( norm(diff2Pz + diff2Ptrue) < norm(diff2Pz - diff2Ptrue) )
+					z = -z
 				end
 				if(is_real)
-					return normalizeToPeriods(W, z[1] + z[2])
+					return normalizeToPeriods(W, z)
 				end
-				return z[1] + z[2]
+				return z
 			end
 			if(length(DD.P1) > 0)
-				a = GenerateRandomPoint(Roots, [0, DD.P1[1]])
-				b = sqrt(F(a))
-				D = [Genus2WCurveDivisor(DD.P1, (a,b)), Genus2WCurveDivisor((a,-b))]
-				v = [KummerCoord(D[j], F) for j in 1:2]
-				v = [RichelotSequenceInversion(AMM1, AMM2, AMV, HatF, v[j]/norm(v[j]), e) for j in 1:2]
-				x = [PolynomialRoots.roots([-v[j][3], -v[j][2], v[j][1]]) for j in 1:2]
-				z = [DegenerateAbel(Lcoeff, p, x[j]) for j in 1:2]
-				S = KlFWeight2(z[1])
-				diff2Pz = ((S[3] - S[1]*(S[3][1]/S[1][1]))/S[1][1])[2:3]
-				diff2Ptrue = [(D[1].P2[2] - D[1].P1[2])/(D[1].P2[1] - D[1].P1[1]), (D[1].P2[1]*D[1].P1[2] - D[1].P1[1]*D[1].P2[2])/(D[1].P2[1] - D[1].P1[1])]
-				if( norm(diff2Pz + diff2Ptrue) < norm(diff2Pz - diff2Ptrue) )
-					z[1] = -z[1]
-				end
-				S = KlFWeight2(z[2])
+				v = KummerCoord(D[j], F)
+				v = RichelotSequenceInversion(AMM1, AMM2, AMV, HatF, v/norm(v), e)
+				x = PolynomialRoots.roots([-v[3], -v[2], v[1]])
+				z = DegenerateAbel(Lcoeff, p, x)
+				S = KlFWeight2(z)
 				diff1Pz = [S[3][2]/S[1][2] - S[3][3]/S[1][3], S[2][2]/S[1][2] - S[2][3]/S[1][3]]
-				diff1Ptrue = [0, b/a]
+				diff1Ptrue = [0, DD.P1[2]/DD.P1[1]]
 				println(diff1Pz, "\n", diff1Ptrue)
 				if( norm(diff1Pz + diff1Ptrue) < norm(diff1Pz - diff1Ptrue) )
-					z[2] = -z[2]
+					z = -z
 				end
 				if(is_real)
-					return normalizeToPeriods(W, z[1] + z[2])
+					return normalizeToPeriods(W, z)
 				end
-				return z[1] + z[2]
+				return z
 			end
 			return zeros(Complex{T}, 2)
 		end
