@@ -238,16 +238,16 @@ function RichelotPrecomputation(Roots, n, e, sortmethod, T)
 			rr = fromroots(RR[3])
 			AA,ChiChi, LLcoeffcoeff, DD, CC, RR = RichelotData(pp,qq,rr,T)
 		end
+		R = sortmethod(R)
+		if(maximum([abs(R[j][1] - R[j][2]) for j in 1:3]) < e)
+			break
+		end
 		push!(ArrA, copy(A))
 		push!(ArrChi, copy(Chi))
 		push!(AMM1, D)
 		push!(AMM2, C)
 		push!(AMV, [d, xp, xq, xr])
 		push!(HatF, Lcoeff*fromroots(R))
-		R = sortmethod(R)
-		if(maximum([abs(R[j][1] - R[j][2]) for j in 1:3]) < e)
-			break
-		end
 		if(minimum([abs(R[j][1] - R[j][2])^2 for j in 1:3]) < e)
 			m = j
 		end
