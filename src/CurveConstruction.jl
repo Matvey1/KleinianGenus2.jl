@@ -247,7 +247,7 @@ function RichelotPrecomputation(Roots, n, e, sortmethod, T)
 		push!(AMM1, D)
 		push!(AMM2, C)
 		push!(AMV, [d, xp, xq, xr])
-		push!(HatF, Lcoeff*fromroots(R))
+		push!(HatF, Lcoeff*fromroots(vcat(R[1], R[2], R[3])))
 		if(minimum([abs(R[j][1] - R[j][2])^2 for j in 1:3]) < e)
 			m = j
 		end
