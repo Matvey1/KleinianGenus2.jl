@@ -8,7 +8,7 @@ function is_intersecting(C1, C2)
 end
 
 function belongs_to_circle(z, C)
-	return ((C.radius - sign(C.radius)*abs(z - C.center)) >= 0)
+	return ((C.radius - sign(C.radius)*abs(z - C.center)) > 0)
 end
 
 function common_strip_positive_exists(z, w)
@@ -17,7 +17,7 @@ function common_strip_positive_exists(z, w)
 		return false
 	end
 	t = (z + w)/abs(z + w)
-	if(imag(z/t) > 1 || imag(w/t) > 1)
+	if(abs(imag(z/t)) > 1 || abs(imag(w/t)) > 1)
 		return false
 	end
 	return true
@@ -57,6 +57,8 @@ end
 function generate_separating_strip_if_exists(e)
 	f = z->z/abs(z)
 	arr = vcat(f.(e .* im), f.([e[mod1(j+1, 3)] + e[mod1(j+2, 3)] for j in 1:3]), f.([e[mod1(j+1, 3)] - e[mod1(j+2, 3)] for j in 1:3]))
+    filter!(z -> isfinite(z), arr)
+    isempty(arr) && return nothing
 	d = [minimum(abs.(imag.(e ./ arr[j])))*Int64(strip_separates(e, arr[j])) for j in 1:length(arr)]
 	if(maximum(d) < 1)
 		return nothing
@@ -141,7 +143,7 @@ function construct_tangent_circle(e, dir, j, k)
 	b = e[k]/dir
 	z = (a + b)/2
 	v = (a - b)*im*sign(imag(b))
-	rts = roots([abs(a - b)^2/4 - (imag(a+b)/2 + sign(imag(b)))^2, -2*imag(v)*(imag(a + b)/2 + sign(imag(b))), (real(v))^2])
+	rts = PolynomialRoots.roots([abs(a - b)^2/4 - (imag(a+b)/2 + sign(imag(b)))^2, -2*imag(v)*(imag(a + b)/2 + sign(imag(b))), (real(v))^2])
 	arr = sort(real.(rts))
 	arr = arr[arr .> 0]
 	t = minimum(arr)
@@ -162,7 +164,7 @@ function separate(e)
 	if(sum(b .* ib) > 0)
 		j = findmax(b .* ib)[2]
 		C1 = Circle((e[mod1(j+1, 3)] + e[mod1(j+2, 3)])/2, abs(e[mod1(j+1, 3)] - e[mod1(j+2, 3)])/2)
-		C2 = Circle(-im*sign(imag(C1.center))/sqrt(3), 2/sqrt(3))
+		C2 = Circle(-im*sign(imag(C1.center))/sqrt(oftype(real(e[1]),3)), 2/sqrt(oftype(real(e[1]),3)))
 		return small_inflation_and_separation(e[j], C1, C2)
 	end
 	if(sum(b) == 3)
@@ -209,19 +211,17 @@ end
 end=#
 
 function check_separation(C, arr)
-	if(is_intersecting(C[1], C[2]) || is_intersecting(C[1], C[3]) || is_intersecting(C[2], C[3]))
-		return 1
-	end
-	ind = [Int64(belongs_to_circle(arr[j], C[i])) for i in 1:3, j in 1:5]
-	s = [sum(ind[i, :]) for i in 1:3]
-	if(sum(s) != 5 || maximum(s) != 2)
-		return 2
-	end
-	j = findmin(s)[2]
-	if(C[j].radius > 0)
-		return 2
-	end
-	return 0
+    length(C) == 3 && length(arr) == 5 || return 2
+    all(c -> isfinite(c.center) && isfinite(c.radius) && c.radius != 0, C) || return 1
+    count(c -> c.radius < 0, C) == 1 || return 1
+    if any(is_intersecting(C[i],C[j]) for i in 1:2 for j in i+1:3)
+        return 1
+    end
+    # Use the same OPEN discs as DiskTest, including the point at infinity.
+    membership = [belongs_to_circle(z,c) for c in C, z in arr]
+    all(sum(membership,dims=1) .== 1) || return 2
+    all(sum(membership[i,:]) == (C[i].radius < 0 ? 1 : 2) for i in 1:3) || return 2
+    return 0
 end
 
 function generateTripleOfDiscs(R)
