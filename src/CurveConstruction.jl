@@ -10,55 +10,33 @@ struct Genus2WCurve{T<:AbstractFloat,KF<:Function,SKF<:Function,KF2<:Function,JI
 	AbelMap::AM
 	
 	function Genus2WCurve(data;source = "Coefficients", n = 15, e = nothing, is_real = false, triple_of_discs = nothing)
-		F = undef
-		Roots = undef
-		if(source == "Coefficients")
-			if(length(data) != 6)
-				throw(ArgumentError("Invalid number of coefficients of the polynomial"))
-			end
-			if(abs(data[6] - 4.0) > eps(typeof(real(data[6]))))
-				throw(ArgumentError("Leading coefficient is not equal to 4"))
-			end
-			data[6] = 4.0
-			F = Polynomial(data .* 1.0 .+ 0.0im)
-			Roots = PolynomialRoots.roots(coeffs(F))
-			if(is_real == true && maximum(imag.(Roots)) > eps(typeof(real(Roots[1]))))
-				throw(ArgumentError("The roots are not real"))
-			end
-		elseif(source == "Roots")
-			if(length(data) != 5)
-				throw(ArgumentError("Invalid number of roots"))
-			end
-			Roots = data .* 1.0 .+ 0.0im
-			if(is_real == true && maximum(imag.(Roots)) > eps(typeof(real(Roots[1]))))
-				throw(ArgumentError("The roots are not real"))
-			end
-			if(is_real == true)
-				Roots = real.(Roots) .+ 0.0im
-			end
-			F = fromroots(Roots)*4
-		elseif(source == "Polynomial")
-			if(degree(data) != 5)
-				throw(ArgumentError("Invalid degree of the polynomial"))
-			end
-			cfs = coeffs(data .* 1.0 .+ 0.0im)
-			if(abs(cfs[6] - 4.0) > eps(typeof(real(cfs[6]))))
-				throw(ArgumentError("Leading coefficient is not equal to 4"))
-			end
-			cfs[6] = 4.0
-			F = Polynomial(cfs)
-			Roots = PolynomialRoots.roots(coeffs(F))
-			if(is_real == true && maximum(imag.(Roots)) > eps(typeof(real(Roots[1]))))
-				throw(ArgumentError("The roots are not real"))
-			end
-		else 
-			throw(ArgumentError("Invalid source: please ensure that source is equal to either \"Coefficients\", or \"Roots\", or \"Polynomial\";\nby default source is equal to \"Coefficients\""))
-		end
-		T = typeof(real(sum(Roots)))
-		F = Polynomial(Complex{T}.(coeffs(F)))
-		if(isnothing(e))
-			e = 10*eps(T)
-		end
+        n isa Integer && n > 0 || throw(ArgumentError("n must be a positive integer"))
+        is_real isa Bool || throw(ArgumentError("is_real must be Boolean"))
+        source in ("Coefficients", "Roots", "Polynomial") || throw(ArgumentError("Invalid source"))
+        raw = source == "Polynomial" ? coeffs(data) : collect(data)
+        length(raw) == (source == "Roots" ? 5 : 6) || throw(ArgumentError("Invalid number of roots or coefficients"))
+        values = complex.(float.(raw))
+        T = promote_type(Float64, typeof(real(sum(values))))
+        all(isfinite, values) || throw(ArgumentError("Roots and coefficients must be finite"))
+        if source == "Roots"
+            Roots = Complex{T}.(values)
+            F = 4*fromroots(Roots)
+        else
+            abs(values[6] - 4) <= eps(T) || throw(ArgumentError("Leading coefficient is not equal to 4"))
+            values[6] = 4
+            F = Polynomial(Complex{T}.(values))
+            Roots = PolynomialRoots.roots(coeffs(F))
+        end
+        if is_real
+            maximum(abs, imag.(Roots)) <= 100*eps(T)*max(one(T), maximum(abs, Roots)) ||
+                throw(ArgumentError("The roots are not real"))
+            Roots = complex.(real.(Roots))
+            F = 4*fromroots(Roots)
+        end
+        all(isfinite, Roots) || throw(ArgumentError("Root calculation failed"))
+        length(unique(Roots)) == 5 || throw(ArgumentError("The curve must have five distinct roots"))
+        e = isnothing(e) ? 10*eps(T) : T(e)
+        isfinite(e) && e > 0 || throw(ArgumentError("e must be finite and positive"))
 		ArrA = undef
 		ArrChi = undef
 		Lcoeff = undef
@@ -91,7 +69,7 @@ struct Genus2WCurve{T<:AbstractFloat,KF<:Function,SKF<:Function,KF2<:Function,JI
 			end
 			ind = verifySortingMethod(Roots, triple_of_discs)
 			if(isn && ind != 0)
-				throw(InexactError("Cannot construct a valid triple of discs; try increasing precision"))
+				throw(ErrorException("Cannot construct a valid triple of discs; try increasing precision or specifying triple_of_discs"))
 			end
 			if(!isn && ind == 1)
 				throw(ArgumentError("The specified triple of discs is not disjoint"))
@@ -114,11 +92,16 @@ struct Genus2WCurve{T<:AbstractFloat,KF<:Function,SKF<:Function,KF2<:Function,JI
 			return GenericKleinianDuplication(ArrA,ArrChi,Lcoeff,p,AA,ChiChi,w)
 		end
 		function JacInv(z)
-			S = KlFWeight2(z)
-			if(abs(S[1][1]) < 100*e)
-				if(abs(S[1][2]) < 100*e)
-					return Genus2WCurveDivisor()
-				end
+            if is_real
+                original_scale = max(one(T),norm(z))
+                z = reduce_periods(z)
+                norm(z) <= 8*eps(T)*original_scale && return Genus2WCurveDivisor()
+            end
+            all(iszero,z) && return Genus2WCurveDivisor()
+            S = KlFWeight2(z)
+            # Compare projective coordinates, not their absolute magnitudes.
+            if abs(S[1][1]) <= 100*e*max(abs(S[1][2]),abs(S[1][3]))
+                iszero(S[1][2]) && throw(ErrorException("Jacobi inversion is ill-conditioned; increase precision"))
 				x = -S[1][3]/S[1][2]
 				y = -(S[2][2]/S[1][2])*x  - S[2][3]/S[1][2]#(S[2][2] * S[1][3] - S[2][3]*S[1][2]) / (S[1][2])^2
 				return Genus2WCurveDivisor((x,y))
@@ -131,91 +114,80 @@ struct Genus2WCurve{T<:AbstractFloat,KF<:Function,SKF<:Function,KF2<:Function,JI
 			yvec = xvec.*p222 .+ p221
 			return Genus2WCurveDivisor((xvec[1], yvec[1]), (xvec[2], yvec[2]))
 		end
-		function Ab(DD::Genus2WCurveDivisor, randomize = false)
-			if(randomize)
-				if(length(DD.P2) > 0)
-					a = GenerateRandomPoint(Roots, [0, DD.P1[1], DD.P2[1]])
-					b = sqrt(F(a))
-					D = [Genus2WCurveDivisor(DD.P1, (a,b)), Genus2WCurveDivisor(DD.P2, (a,-b))]
-					v = [KummerCoord(D[j], F) for j in 1:2]
-					v = [RichelotSequenceInversion(AMM1, AMM2, AMV, HatF, v[j]/norm(v[j]), e) for j in 1:2]
-					x = [PolynomialRoots.roots([-v[j][3], -v[j][2], v[j][1]]) for j in 1:2]
-					z = [DegenerateAbel(Lcoeff, p, x[j]) for j in 1:2]
-					for j in 1:2
-						S = KlFWeight2(z[j])
-						diff2Pz = ((S[3] - S[1]*(S[3][1]/S[1][1]))/S[1][1])[2:3]
-						diff2Ptrue = [(D[j].P2[2] - D[j].P1[2])/(D[j].P2[1] - D[j].P1[1]), (D[j].P2[1]*D[j].P1[2] - D[j].P1[1]*D[j].P2[2])/(D[j].P2[1] - D[j].P1[1])]
-						if( norm(diff2Pz + diff2Ptrue) < norm(diff2Pz - diff2Ptrue) )
-							z[j] = -z[j]
-						end
-					end
-					if(is_real)
-						return normalizeToPeriods(W, z[1] + z[2])
-					end
-					return z[1] + z[2]
-				end
-				if(length(DD.P1) > 0)
-					a = GenerateRandomPoint(Roots, [0, DD.P1[1]])
-					b = sqrt(F(a))
-					D = [Genus2WCurveDivisor(DD.P1, (a,b)), Genus2WCurveDivisor((a,-b))]
-					v = [KummerCoord(D[j], F) for j in 1:2]
-					v = [RichelotSequenceInversion(AMM1, AMM2, AMV, HatF, v[j]/norm(v[j]), e) for j in 1:2]
-					x = [PolynomialRoots.roots([-v[j][3], -v[j][2], v[j][1]]) for j in 1:2]
-					z = [DegenerateAbel(Lcoeff, p, x[j]) for j in 1:2]
-					S = KlFWeight2(z[1])
-					diff2Pz = ((S[3] - S[1]*(S[3][1]/S[1][1]))/S[1][1])[2:3]
-					diff2Ptrue = [(D[1].P2[2] - D[1].P1[2])/(D[1].P2[1] - D[1].P1[1]), (D[1].P2[1]*D[1].P1[2] - D[1].P1[1]*D[1].P2[2])/(D[1].P2[1] - D[1].P1[1])]
-					if( norm(diff2Pz + diff2Ptrue) < norm(diff2Pz - diff2Ptrue) )
-						z[1] = -z[1]
-					end
-					S = KlFWeight2(z[2])
-					diff1Pz = [S[3][2]/S[1][2] - S[3][3]/S[1][3], S[2][2]/S[1][2] - S[2][3]/S[1][3]]
-					diff1Ptrue = [0, b/a]
-					println(diff1Pz, "\n", diff1Ptrue)
-					if( norm(diff1Pz + diff1Ptrue) < norm(diff1Pz - diff1Ptrue) )
-						z[2] = -z[2]
-					end
-					if(is_real)
-						return normalizeToPeriods(W, z[1] + z[2])
-					end
-					return z[1] + z[2]
-				end
-			end
-			if(length(DD.P2) > 0)
-				v = KummerCoord(DD, F)
-				v = RichelotSequenceInversion(AMM1, AMM2, AMV, HatF, v/norm(v), e)
-				x = PolynomialRoots.roots([-v[3], -v[2], v[1]])
-				z = DegenerateAbel(Lcoeff, p, x)
-				S = KlFWeight2(z)
-				diff2Pz = ((S[3] - S[1]*(S[3][1]/S[1][1]))/S[1][1])[2:3]
-				diff2Ptrue = [(DD.P2[2] - DD.P1[2])/(DD.P2[1] - DD.P1[1]), (DD.P2[1]*DD.P1[2] - DD.P1[1]*DD.P2[2])/(DD.P2[1] - DD.P1[1])]
-				if( norm(diff2Pz + diff2Ptrue) < norm(diff2Pz - diff2Ptrue) )
-					z = -z
-				end
-				if(is_real)
-					return normalizeToPeriods(W, z)
-				end
-				return z
-			end
-			if(length(DD.P1) > 0)
-				v = KummerCoord(D[j], F)
-				v = RichelotSequenceInversion(AMM1, AMM2, AMV, HatF, v/norm(v), e)
-				x = PolynomialRoots.roots([-v[3], -v[2], v[1]])
-				z = DegenerateAbel(Lcoeff, p, x)
-				S = KlFWeight2(z)
-				diff1Pz = [S[3][2]/S[1][2] - S[3][3]/S[1][3], S[2][2]/S[1][2] - S[2][3]/S[1][3]]
-				diff1Ptrue = [0, DD.P1[2]/DD.P1[1]]
-				println(diff1Pz, "\n", diff1Ptrue)
-				if( norm(diff1Pz + diff1Ptrue) < norm(diff1Pz - diff1Ptrue) )
-					z = -z
-				end
-				if(is_real)
-					return normalizeToPeriods(W, z)
-				end
-				return z
-			end
-			return zeros(Complex{T}, 2)
-		end
+        # Factor the real period matrix once, not at every Abel evaluation.
+        period_factor = is_real ? factorize(RealPeriodMatrix(W)) : nothing
+        reduce_periods = z -> isnothing(period_factor) ? z :
+            z - W*round.(period_factor \ [real(z[1]), imag(z[1]), real(z[2]), imag(z[2])])
+
+        function abel_generic(D)
+            target = KummerCoord(D, F)
+            v = target
+            v = RichelotSequenceInversion(ArrA, AMM1, AMM2, AMV, HatF, v/norm(v), e)
+            x = PolynomialRoots.roots([-v[3], -v[2], v[1]])
+            length(x) == 2 || throw(ErrorException("Degenerate Abel inversion; use randomize=true"))
+            z = DegenerateAbel(Lcoeff, p, x)
+            S = KlFWeight2(z)
+            ProjectiveDistance(S[1],target) <= max(100*e,1000*eps(T)) ||
+                throw(ErrorException("Abel inversion failed the Kummer-coordinate check; increase precision"))
+            if !isempty(D.P2)
+                slope = (D.P2[2]-D.P1[2])/(D.P2[1]-D.P1[1])
+                intercept = D.P1[2]-slope*D.P1[1]
+                expected = [slope, intercept]
+                actual = ((S[3] - S[1]*(S[3][1]/S[1][1]))/S[1][1])[2:3]
+            else
+                # On the sigma divisor y = -(x*d_1 S22 + d_1 S12)/S22.
+                # This expression also works at x=0 (no division by x or S12).
+                expected = D.P1[2]
+                actual = -(D.P1[1]*S[2][2]+S[2][3])/S[1][2]
+            end
+            all(isfinite, z) && all(isfinite, actual) ||
+                throw(ErrorException("Non-finite Abel inversion; use randomize=true or increase precision"))
+            return norm(actual+expected) < norm(actual-expected) ? -z : z
+        end
+        function Ab(DD::Genus2WCurveDivisor, randomize = false)
+            for P in (DD.P1, DD.P2)
+                isempty(P) && continue
+                all(isfinite, P) || throw(ArgumentError("Divisor coordinates must be finite"))
+                scale = max(one(T), abs(P[2])^2, sum(abs(F[k])*abs(P[1])^k for k in 0:5))
+                abs(P[2]^2-F(P[1])) <= 1000*max(e,eps(T))*scale ||
+                    throw(ArgumentError("Divisor point is not on the curve"))
+            end
+            isempty(DD.P1) && return zeros(Complex{T}, 2)
+            if !isempty(DD.P2) && DD.P1[1] == DD.P2[1]
+                DD.P1[2] == -DD.P2[2] && return zeros(Complex{T}, 2)
+                randomize = true # repeated point: avoid the secant's 0/0
+            end
+            if randomize
+                aux = isempty(DD.P2) ? [DD.P1[1]] : [DD.P1[1],DD.P2[1]]
+                for attempt in 1:8
+                    a = GenerateRandomPoint(Roots, aux)
+                    b = sqrt(F(a))
+                    first = Genus2WCurveDivisor(DD.P1, (a,b))
+                    second = isempty(DD.P2) ? Genus2WCurveDivisor((a,-b)) : Genus2WCurveDivisor(DD.P2,(a,-b))
+                    try
+                        return reduce_periods(abel_generic(first)+abel_generic(second))
+                    catch err
+                        if !(err isa ErrorException || err isa LinearAlgebra.SingularException) || attempt == 8
+                            rethrow()
+                        end
+                    end
+                end
+            end
+            z = try
+                abel_generic(DD)
+            catch err
+                if err isa ErrorException || err isa LinearAlgebra.SingularException
+                    return Ab(DD, true)
+                end
+                rethrow()
+            end
+            if is_real && isempty(DD.P2) && iszero(DD.P1[2])
+                # A branch point is exactly a point of order two in the Jacobian.
+                coordinates = period_factor \ [real(z[1]),imag(z[1]),real(z[2]),imag(z[2])]
+                z = W*(round.(2 .* coordinates)./2)
+            end
+            return reduce_periods(z)
+        end
 		return new{T, typeof(Kl),typeof(KlSigmaSq),typeof(KlFWeight2),typeof(JacInv),typeof(Ab)}(F, Roots, W, E, Kl, KlSigmaSq, KlFWeight2, JacInv, Ab)	
 	end
 	
@@ -274,18 +246,19 @@ function RichelotPrecomputation(Roots, n, e, sortmethod, T)
 			AA,ChiChi, LLcoeffcoeff, DD, CC, RR = RichelotData(pp,qq,rr,T)
 		end
 		R = sortmethod(R)
-		if(maximum([abs(R[j][1] - R[j][2]) for j in 1:3]) < e)
-			break
-		end
 		push!(ArrA, copy(A))
 		push!(ArrChi, copy(Chi))
 		push!(AMM1, D)
 		push!(AMM2, C)
 		push!(AMV, [d, xp, xq, xr])
 		push!(HatF, Lcoeff*fromroots(vcat(R[1], R[2], R[3])))
-		if(minimum([abs(R[j][1] - R[j][2])^2 for j in 1:3]) < e)
-			m = j
-		end
+        if minimum(abs(R[k][1]-R[k][2])^2 for k in 1:3) < e
+            m = j
+        end
+        if maximum(abs(R[k][1]-R[k][2]) for k in 1:3) < e
+            break
+        end
+        j == n && @warn "Richelot iteration did not reach e; increase n or working precision" n e
 	end
 	p = SplitToLimitRoots(R)
 	return ArrA, ArrChi, Lcoeff, p, AA, ChiChi, m, AMM1, AMM2, AMV,HatF
