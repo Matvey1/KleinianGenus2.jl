@@ -45,17 +45,34 @@ function DegenerateS(w,lcoeff,p)
 	return (S,dS1,dS2)
 end
 
+# Symmetric bilinear contractions; one A*S per component serves all three outputs.
+function TransformWeight2(S, dS1, dS2, A, Chi, w)
+    T = promote_type(eltype(S), eltype(A), eltype(w))
+    R, R1, R2 = zeros(T,4), zeros(T,4), zeros(T,4)
+    @inbounds for k in 1:4, i in 1:4
+        v = zero(T)
+        for j in 1:4
+            v += A[k,i,j]*S[j]
+        end
+        R[k] += S[i]*v
+        R1[k] += dS1[i]*v
+        R2[k] += dS2[i]*v
+    end
+    factor = exp(Bilin(Chi,w,w))/A[4,4,4]
+    h1 = 2*(Chi[1,1]*w[1]+Chi[1,2]*w[2])
+    h2 = 2*(Chi[2,1]*w[1]+Chi[2,2]*w[2])
+    return (factor .* R, factor .* (h1 .* R .+ 2 .* R1),
+            factor .* (h2 .* R .+ 2 .* R2))
+end
+
 function SFuncGeneric(ArrA, ArrChi, lcoeff, p, w)
-	(S, dS1, dS2) = DegenerateS(w, lcoeff, p)
-	for j in length(ArrA):-1:1
-		R = [Bilin(ArrA[j][k,:,:], S, S) for k in 1:4]
-		R1 = [Bilin(ArrA[j][k,:,:], S, dS1) for k in 1:4]
-		R2 = [Bilin(ArrA[j][k,:,:], S, dS2) for k in 1:4]
-		S = (exp(Bilin(ArrChi[j], w, w))/ArrA[j][4,4,4]) .* R
-		dS1 = (exp(Bilin(ArrChi[j], w, w))/ArrA[j][4,4,4]) .* (Bilin(ArrChi[j], [2,0], w) .* R + 2 .* R1)
-		dS2 = (exp(Bilin(ArrChi[j], w, w))/ArrA[j][4,4,4]) .* (Bilin(ArrChi[j], [0,2], w) .* R + 2 .* R2)
-	end
-	return (S, dS1, dS2)
+    length(w) == 2 || throw(ArgumentError("The Abel coordinate must have length two"))
+    all(isfinite, w) || throw(ArgumentError("The Abel coordinate must be finite"))
+    S = DegenerateS(w, lcoeff, p)
+    for j in length(ArrA):-1:1
+        S = TransformWeight2(S...,ArrA[j],ArrChi[j],w)
+    end
+    return S
 end
 
 function SigmaDuplication(S)
@@ -63,20 +80,9 @@ function SigmaDuplication(S)
 end
 
 function SFuncGenericDuplication(SS,w,A2,Chi2,A1,Chi1)
-	S, dS1, dS2 = SS[1] .* [4, 4, 4, 1], SS[2] .* [2, 2, 2, 1/2], SS[3] .* [2, 2, 2, 1/2]
-	R = [Bilin(A2[k,:,:], S, S) for k in 1:4]
-	R1 = [Bilin(A2[k,:,:], S, dS1) for k in 1:4]
-	R2 = [Bilin(A2[k,:,:], S, dS2) for k in 1:4]
-	S = (exp(Bilin(Chi2, w, w))/A2[4,4,4]) .* R
-	dS1 = (exp(Bilin(Chi2, w, w))/A2[4,4,4]) .* (Bilin(Chi2, [2,0], w) .* R + 2 .* R1)
-	dS2 = (exp(Bilin(Chi2, w, w))/A2[4,4,4]) .* (Bilin(Chi2, [0,2], w) .* R + 2 .* R2)
-	R = [Bilin(A1[k,:,:], S, S) for k in 1:4]
-	R1 = [Bilin(A1[k,:,:], S, dS1) for k in 1:4]
-	R2 = [Bilin(A1[k,:,:], S, dS2) for k in 1:4]
-	S = (exp(Bilin(Chi1, w, w))/A1[4,4,4]) .* R
-	dS1 = (exp(Bilin(Chi1, w, w))/A1[4,4,4]) .* (Bilin(Chi1, [2,0], w) .* R + 2 .* R1)
-	dS2 = (exp(Bilin(Chi1, w, w))/A1[4,4,4]) .* (Bilin(Chi1, [0,2], w) .* R + 2 .* R2)
-	return (S, dS1, dS2)
+    S = (SS[1] .* [4,4,4,1], SS[2] .* [2,2,2,1/2], SS[3] .* [2,2,2,1/2])
+    S = TransformWeight2(S...,A2,Chi2,w)
+    return TransformWeight2(S...,A1,Chi1,w)
 end
 
 function GenericKleinianDuplication(ArrA, ArrChi, lcoeff, p, AA, ChiChi, w)
