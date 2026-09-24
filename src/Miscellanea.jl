@@ -1,22 +1,23 @@
 struct Genus2WCurveDivisor{T<:AbstractFloat}
-	P1::Array{Complex{T}}
-	P2::Array{Complex{T}}
-	
-	function Genus2WCurveDivisor()
-		return new{Float64}([], [])
-	end
-	function Genus2WCurveDivisor(p1)
-		return new{typeof(real(p1[1]))}([p1[1], p1[2]], [])
-	end
-	function Genus2WCurveDivisor(p1,p2)
-		return new{typeof(real(p1[1]))}([p1[1], p1[2]], [p2[1], p2[2]])
-	end
+    P1::Array{Complex{T}}
+    P2::Array{Complex{T}}
+    Genus2WCurveDivisor() = new{Float64}(ComplexF64[], ComplexF64[])
+    function Genus2WCurveDivisor(p1, p2=())
+        length(p1) in (0,2) && length(p2) in (0,2) ||
+            throw(ArgumentError("A point must have two coordinates, or be empty for infinity"))
+        isempty(p1) && isempty(p2) && return Genus2WCurveDivisor()
+        isempty(p1) && ((p1,p2) = (p2,p1))
+        vals = promote(float.(vcat(collect(p1),collect(p2)))...)
+        T = typeof(real(vals[1]))
+        all(isfinite, vals) || throw(ArgumentError("Point coordinates must be finite"))
+        return new{T}(Complex{T}[vals[1:2]...], Complex{T}[vals[3:end]...])
+    end
 end
 
 Base.show(io::IO,D::Genus2WCurveDivisor) = print(io, Genus2WCurveDivisorString(D))
 
 function Genus2WCurveDivisorString(D::Genus2WCurveDivisor)
-	s = "Genus2WCurveDivisor{" * string(typeof(real(D.P1[1]))) * "}\n"
+	s = "Genus2WCurveDivisor{" * string(typeof(real(zero(eltype(D.P1)))) ) * "}\n"
 	if(length(D.P2) > 0)
 		s = s * "P1 + P2 - 2*inf, where\n"
 		s = s * "P1 = " * string(D.P1) * "\n"
@@ -54,7 +55,12 @@ end
 end
 
 @inline function Bilin(A,x,y)
-	return sum(y.*(A[:,:]*x))
+	# Bilinear, not Hermitian: do not conjugate x or y.
+    value = zero(promote_type(eltype(A), eltype(x), eltype(y)))
+    @inbounds for j in eachindex(x), i in eachindex(y)
+        value += y[i]*A[i,j]*x[j]
+    end
+    return value
 end
 
 function DiskTest(disc)
@@ -124,14 +130,15 @@ end
 
 function GenerateRandomPoint(Roots, aux)
 	T = typeof(real(Roots[1]))
-	while(true)
+	for _ in 1:128
 		a = 10*(rand(Complex{T}) - 0.5 - 0.5im)
 		if( minimum([abs(Roots[j] - a) for j in 1:length(Roots)]) > 1)
 			if( minimum([abs(aux[j] - a) for j in 1:length(aux)]) > 1)
 				return a
 			end
 		end
-	end
+    end
+    throw(ErrorException("Could not choose an auxiliary point after 128 attempts"))
 end
 
 function normalizeToPeriods(Per, z)
@@ -148,7 +155,7 @@ function normalizeToPeriods(Per, z)
     end
   end
   
-  w = inv(M) * a
+  w = M \ a
   for i in 1:4
     w[i] = round(w[i])
   end
@@ -157,6 +164,20 @@ function normalizeToPeriods(Per, z)
 end
 
 function verifySortingMethod(Roots, triple_of_discs)
+    length(triple_of_discs) == 3 || return 1
+    all(c -> length(c) == 2 && c[2] isa Real, triple_of_discs) || return 1
 	C = [Circle(triple_of_discs[i][1], triple_of_discs[i][2]) for i in 1:3]
 	return check_separation(C, Roots)
+end
+
+function RealPeriodMatrix(W)
+    return [real(W[1,:])'; imag(W[1,:])'; real(W[2,:])'; imag(W[2,:])']
+end
+
+function ProjectiveDistance(u,v)
+    a,b=norm(u),norm(v)
+    (!isfinite(a) || !isfinite(b) || iszero(a) || iszero(b)) && return Inf
+    x,y=u/a,v/b
+    c=dot(y,x)
+    return iszero(c) ? sqrt(oftype(real(c),2)) : norm(x-y*(c/abs(c)))
 end
