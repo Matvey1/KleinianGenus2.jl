@@ -166,3 +166,14 @@ end
         end
     end
 end
+
+include("richelot_stability.jl")
+
+@testset "Randomized Abel inversion regression" begin
+    Random.seed!(2)
+    original_precision=precision(BigFloat)
+    result=testWithMultiprecisionG2(3,4;randomize=true,rng=MersenneTwister(2))
+    @test all(isfinite,vcat(result...))
+    @test all(result[7] .< [big"1e-20",big"1e-45",big"1e-90",big"1e-130"])
+    @test precision(BigFloat)==original_precision
+end
